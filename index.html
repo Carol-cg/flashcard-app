@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flashcard Explainer</title>
+  <style>
+    body {
+      font-family: Georgia, serif;
+      background: #f0f4f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      color: #1a202c;
+      margin-bottom: 8px;
+    }
+
+    p.subtitle {
+      color: #718096;
+      margin-bottom: 32px;
+      font-size: 1rem;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 40px;
+      width: 100%;
+      max-width: 500px;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px 16px;
+      font-size: 1rem;
+      border: 2px solid #cbd5e0;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      border-color: #667eea;
+    }
+
+    button {
+      padding: 12px 20px;
+      background: #667eea;
+      color: white;
+      font-size: 1rem;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #5a67d8;
+    }
+
+    /* --- FLIP CARD STYLES --- */
+
+    /* Outer wrapper — sets the 3D perspective */
+    .card-wrapper {
+      width: 100%;
+      max-width: 500px;
+      height: 280px;
+      perspective: 1000px; /* Creates the 3D depth effect */
+      display: none;       /* Hidden until user submits */
+      cursor: pointer;
+    }
+
+    .card-wrapper.visible {
+      display: block;
+    }
+
+    /* The card itself — this is what rotates */
+    .card {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;       /* Children exist in 3D space */
+      transition: transform 0.6s ease;    /* Smooth flip animation */
+    }
+
+    /* When the flipped class is added, rotate 180 degrees */
+    .card.flipped {
+      transform: rotateY(180deg);
+    }
+
+    /* Shared styles for front and back faces */
+    .card-front,
+    .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 32px;
+      box-sizing: border-box;
+      backface-visibility: hidden; /* Hide the face when it's rotated away */
+    }
+
+    /* FRONT of card — shows the concept */
+    .card-front {
+      background: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+
+    .card-front .card-label {
+      font-size: 0.75rem;
+      font-weight: bold;
+      letter-spacing: 0.1em;
+      color: #667eea;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .card-front .card-concept {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #1a202c;
+      margin-bottom: 24px;
+    }
+
+    .flip-hint {
+      font-size: 0.85rem;
+      color: #a0aec0;
+      margin-top: 8px;
+    }
+
+    /* Reveal button on the front */
+    .reveal-btn {
+      margin-top: 16px;
+      padding: 10px 24px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .reveal-btn:hover {
+      background: #5a67d8;
+    }
+
+    /* Loading state on front */
+    .loading-text {
+      font-size: 1rem;
+      color: #a0aec0;
+      font-style: italic;
+    }
+
+    /* BACK of card — shows the explanation */
+    .card-back {
+      background: #667eea;
+      color: white;
+      /* Start rotated 180deg so it's hidden behind the front */
+      transform: rotateY(180deg);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .card-back .explanation-label {
+      font-size: 0.75rem;
+      font-weight: bold;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 12px;
+    }
+
+    .card-back .card-explanation {
+      font-size: 1rem;
+      line-height: 1.7;
+      color: white;
+    }
+
+    .flip-back-hint {
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.6);
+      margin-top: 16px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🧠 Flashcard Explainer</h1>
+  <p class="subtitle">Type any concept and get a plain-English explanation.</p>
+
+  <div class="input-row">
+    <input
+      type="text"
+      id="conceptInput"
+      placeholder="e.g. photosynthesis, the Cold War, recursion…"
+    />
+    <button onclick="explainConcept()">Explain it</button>
+  </div>
+
+  <!-- Outer wrapper controls visibility -->
+  <div class="card-wrapper" id="cardWrapper">
+    <!-- This div is what actually flips -->
+    <div class="card" id="flashcard">
+
+      <!-- FRONT: shows concept + reveal button -->
+      <div class="card-front">
+        <div class="card-label">Concept</div>
+        <div class="card-concept" id="cardConcept"></div>
+        <!-- Shows while Claude is thinking -->
+        <div class="loading-text" id="loadingText">Getting explanation…</div>
+        <!-- Shows once Claude has responded -->
+        <button class="reveal-btn" id="revealBtn" style="display:none" onclick="flipCard()">
+          Reveal Explanation →
+        </button>
+        <div class="flip-hint" id="flipHint" style="display:none">Click anywhere on the card to flip back</div>
+      </div>
+
+      <!-- BACK: shows Claude's explanation -->
+      <div class="card-back" onclick="flipCard()">
+        <div class="explanation-label">Explanation</div>
+        <div class="card-explanation" id="cardExplanation"></div>
+        <div class="flip-back-hint">Click to flip back ↩</div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    async function explainConcept() {
+      const concept = document.getElementById("conceptInput").value.trim();
+      if (!concept) return;
+
+      // Reset card to front side before showing
+      document.getElementById("flashcard").classList.remove("flipped");
+
+      // Show the concept on the front
+      document.getElementById("cardConcept").textContent = concept;
+
+      // Show loading state, hide reveal button
+      document.getElementById("loadingText").style.display = "block";
+      document.getElementById("revealBtn").style.display = "none";
+      document.getElementById("flipHint").style.display = "none";
+      document.getElementById("cardExplanation").textContent = "";
+
+      // Make the card visible
+      document.getElementById("cardWrapper").classList.add("visible");
+
+      try {
+        const response = await fetch("/explain", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ concept })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          document.getElementById("loadingText").textContent = "Something went wrong. Try again!";
+          return;
+        }
+
+        // Put explanation on the back of the card
+        document.getElementById("cardExplanation").textContent = data.explanation;
+
+        // Hide loading, show the reveal button
+        document.getElementById("loadingText").style.display = "none";
+        document.getElementById("revealBtn").style.display = "inline-block";
+        document.getElementById("flipHint").style.display = "block";
+
+      } catch (err) {
+        document.getElementById("loadingText").textContent = "Network error — is your server running?";
+      }
+    }
+
+    // Flip the card by toggling the "flipped" class
+    function flipCard() {
+      document.getElementById("flashcard").classList.toggle("flipped");
+    }
+  </script>
+
+</body>
+</html>
