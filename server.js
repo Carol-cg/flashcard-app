@@ -10,6 +10,18 @@ const PORT = 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
+// ==============================
+// IN-MEMORY DATABASE
+// This array stores all saved cards
+// (resets when server restarts — no database needed yet)
+// ==============================
+let cards = [];
+let nextId = 1; // Simple ID counter
+
+// ==============================
+// AI ROUTE (already existed)
+// POST /explain
+// ==============================
 app.post("/explain", async (req, res) => {
   const { concept } = req.body;
 
@@ -51,11 +63,7 @@ Do not start with "Sure" or "Of course" — go straight into the explanation.`
     const explanation = await new Promise((resolve, reject) => {
       const request = https.request(options, (response) => {
         let data = "";
-
-        response.on("data", (chunk) => {
-          data += chunk;
-        });
-
+        response.on("data", (chunk) => { data += chunk; });
         response.on("end", () => {
           try {
             const parsed = JSON.parse(data);
@@ -69,7 +77,6 @@ Do not start with "Sure" or "Of course" — go straight into the explanation.`
           }
         });
       });
-
       request.on("error", reject);
       request.write(bodyData);
       request.end();
@@ -81,6 +88,96 @@ Do not start with "Sure" or "Of course" — go straight into the explanation.`
     console.error("Server error:", err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ==============================
+// CRUD ROUTES
+// ==============================
+
+// CREATE — Save a new flashcard
+// POST /cards
+// Body: { concept, explanation }
+app.post("/cards", (req, res) => {
+  const { concept, explanation } = req.body;
+
+  // Validate both fields exist
+  if (!concept || !explanation) {
+    return res.status(400).json({ error: "concept and explanation are required" });
+  }
+
+  // Build the new card object
+  const newCard = {
+    id: nextId++,       // Give it a unique ID
+    concept,
+    explanation,
+    createdAt: new Date().toISOString()
+  };
+
+  // Push it into our in-memory array
+  cards.push(newCard);
+
+  // Return the created card with 201 (Created) status
+  res.status(201).json(newCard);
+});
+
+// READ ALL — Get all saved flashcards
+// GET /cards
+app.get("/cards", (req, res) => {
+  res.json(cards);
+});
+
+// READ ONE — Get a single flashcard by ID
+// GET /cards/:id
+app.get("/cards/:id", (req, res) => {
+  // req.params.id comes from the URL (e.g. /cards/2)
+  const id = parseInt(req.params.id);
+  const card = cards.find(c => c.id === id);
+
+  if (!card) {
+    return res.status(404).json({ error: "Card not found" });
+  }
+
+  res.json(card);
+});
+
+// UPDATE — Edit a card's explanation
+// PUT /cards/:id
+// Body: { explanation }
+app.put("/cards/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+  const cardIndex = cards.findIndex(c => c.id === id);
+
+  if (cardIndex === -1) {
+    return res.status(404).json({ error: "Card not found" });
+  }
+
+  const { explanation } = req.body;
+
+  if (!explanation) {
+    return res.status(400).json({ error: "explanation is required" });
+  }
+
+  // Update just the explanation, keep everything else
+  cards[cardIndex].explanation = explanation;
+  cards[cardIndex].updatedAt = new Date().toISOString();
+
+  res.json(cards[cardIndex]);
+});
+
+// DELETE — Remove a card
+// DELETE /cards/:id
+app.delete("/cards/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+  const cardIndex = cards.findIndex(c => c.id === id);
+
+  if (cardIndex === -1) {
+    return res.status(404).json({ error: "Card not found" });
+  }
+
+  // Remove the card from the array
+  const deletedCard = cards.splice(cardIndex, 1);
+
+  res.json({ message: "Card deleted", card: deletedCard[0] });
 });
 
 app.listen(PORT, () => {
